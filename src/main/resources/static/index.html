@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>合同审批管理系统</title>
+    <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
+    <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="app">
+    <el-container>
+        <el-header class="header">
+            <div class="logo">
+                <i class="el-icon-document"></i>
+                <span>合同审批管理系统</span>
+            </div>
+            <div class="user-info">
+                <span>当前用户：admin</span>
+            </div>
+        </el-header>
+        <el-main>
+            <div class="toolbar">
+                <el-button type="primary" icon="el-icon-plus" @click="handleAdd">新增合同</el-button>
+            </div>
+
+            <el-card class="search-card">
+                <el-form :model="queryForm" inline label-width="90px">
+                    <el-form-item label="合同编号">
+                        <el-input v-model="queryForm.contractNo" placeholder="请输入合同编号" clearable></el-input>
+                    </el-form-item>
+                    <el-form-item label="客户名称">
+                        <el-input v-model="queryForm.customerName" placeholder="请输入客户名称" clearable></el-input>
+                    </el-form-item>
+                    <el-form-item label="合同状态">
+                        <el-select v-model="queryForm.status" placeholder="请选择" clearable>
+                            <el-option label="草稿" value="DRAFT"></el-option>
+                            <el-option label="待审批" value="PENDING_APPROVAL"></el-option>
+                            <el-option label="审批通过" value="APPROVED"></el-option>
+                            <el-option label="已驳回" value="REJECTED"></el-option>
+                            <el-option label="已撤回" value="WITHDRAWN"></el-option>
+                            <el-option label="已归档" value="ARCHIVED"></el-option>
+                        </el-select>
+                    </el-form-item>
+                    <el-form-item label="负责人">
+                        <el-input v-model="queryForm.responsiblePerson" placeholder="请输入负责人" clearable></el-input>
+                    </el-form-item>
+                    <el-form-item label="金额范围">
+                        <el-input v-model="queryForm.minAmount" placeholder="最小" style="width: 100px;"></el-input>
+                        <span style="margin: 0 5px;">-</span>
+                        <el-input v-model="queryForm.maxAmount" placeholder="最大" style="width: 100px;"></el-input>
+                    </el-form-item>
+                    <el-form-item label="创建日期">
+                        <el-date-picker
+                                v-model="queryForm.startDate"
+                                type="date"
+                                placeholder="开始日期"
+                                value-format="yyyy-MM-dd"
+                                style="width: 140px;">
+                        </el-date-picker>
+                        <span style="margin: 0 5px;">至</span>
+                        <el-date-picker
+                                v-model="queryForm.endDate"
+                                type="date"
+                                placeholder="结束日期"
+                                value-format="yyyy-MM-dd"
+                                style="width: 140px;">
+                        </el-date-picker>
+                    </el-form-item>
+                    <el-form-item>
+                        <el-button type="primary" icon="el-icon-search" @click="handleQuery">查询</el-button>
+                        <el-button icon="el-icon-refresh" @click="handleReset">重置</el-button>
+                    </el-form-item>
+                </el-form>
+            </el-card>
+
+            <el-card class="table-card">
+                <el-table :data="tableData" border stripe v-loading="loading">
+                    <el-table-column type="index" label="序号" width="60" align="center"></el-table-column>
+                    <el-table-column prop="contractNo" label="合同编号" width="140"></el-table-column>
+                    <el-table-column prop="contractName" label="合同名称" min-width="180" show-overflow-tooltip></el-table-column>
+                    <el-table-column prop="customerName" label="客户名称" width="140" show-overflow-tooltip></el-table-column>
+                    <el-table-column prop="amount" label="合同金额" width="120" align="right">
+                        <template slot-scope="scope">
+                            {{ formatAmount(scope.row.amount) }}
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="responsiblePerson" label="负责人" width="100"></el-table-column>
+                    <el-table-column prop="status" label="状态" width="100" align="center">
+                        <template slot-scope="scope">
+                            <el-tag :type="getStatusTagType(scope.row.status)">
+                                {{ getStatusText(scope.row.status) }}
+                            </el-tag>
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="createTime" label="创建时间" width="160"></el-table-column>
+                    <el-table-column label="操作" width="280" fixed="right" align="center">
+                        <template slot-scope="scope">
+                            <el-button type="text" size="small" @click="handleView(scope.row)">详情</el-button>
+                            <el-button
+                                    type="text"
+                                    size="small"
+                                    @click="handleEdit(scope.row)"
+                                    :disabled="!canEdit(scope.row.status)">
+                                编辑
+                            </el-button>
+                            <el-button
+                                    type="text"
+                                    size="small"
+                                    @click="handleSubmit(scope.row)"
+                                    :disabled="!canSubmit(scope.row.status)">
+                                提交
+                            </el-button>
+                            <el-button
+                                    type="text"
+                                    size="small"
+                                    @click="handleApprove(scope.row)"
+                                    :disabled="!canApprove(scope.row.status)">
+                                审批
+                            </el-button>
+                            <el-button
+                                    type="text"
+                                    size="small"
+                                    @click="handleWithdraw(scope.row)"
+                                    :disabled="!canWithdraw(scope.row.status)">
+                                撤回
+                            </el-button>
+                            <el-button
+                                    type="text"
+                                    size="small"
+                                    @click="handleArchive(scope.row)"
+                                    :disabled="!canArchive(scope.row.status)">
+                                归档
+                            </el-button>
+                            <el-button
+                                    type="text"
+                                    size="small"
+                                    @click="handleDelete(scope.row)"
+                                    :disabled="!canDelete(scope.row.status)">
+                                删除
+                            </el-button>
+                        </template>
+                    </el-table-column>
+                </el-table>
+                <el-pagination
+                        class="pagination"
+                        @size-change="handleSizeChange"
+                        @current-change="handleCurrentChange"
+                        :current-page="queryForm.pageNum"
+                        :page-sizes="[10, 20, 50, 100]"
+                        :page-size="queryForm.pageSize"
+                        layout="total, sizes, prev, pager, next, jumper"
+                        :total="total">
+                </el-pagination>
+            </el-card>
+        </el-main>
+    </el-container>
+
+    <contract-form
+            ref="contractForm"
+            :visible="formVisible"
+            :contract-id="currentContractId"
+            :readonly="formReadonly"
+            @close="formVisible = false"
+            @success="handleFormSuccess">
+    </contract-form>
+
+    <contract-detail
+            ref="contractDetail"
+            :visible="detailVisible"
+            :contract-id="currentContractId"
+            @close="detailVisible = false">
+    </contract-detail>
+
+    <approval-dialog
+            ref="approvalDialog"
+            :visible="approvalVisible"
+            :contract-id="currentContractId"
+            @close="approvalVisible = false"
+            @success="handleApprovalSuccess">
+    </approval-dialog>
+</div>
+
+<script src="https://unpkg.com/vue@2.7.14/dist/vue.js"></script>
+<script src="https://unpkg.com/element-ui/lib/index.js"></script>
+<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+<script src="js/api.js"></script>
+<script src="js/components/contract-form.js"></script>
+<script src="js/components/contract-detail.js"></script>
+<script src="js/components/approval-dialog.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

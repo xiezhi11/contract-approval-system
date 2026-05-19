@@ -1,6 +1,8 @@
 package com.contract.entity;
 
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 import javax.persistence.*;
 import java.util.HashSet;
@@ -28,5 +30,7 @@ public class SysRole {
     private Boolean enabled = true;
 
     @ManyToMany(mappedBy = "roles")
+    @EqualsAndHashCode.Exclude
+    @ToString.Exclude
     private Set<SysUser> users = new HashSet<>();
 }

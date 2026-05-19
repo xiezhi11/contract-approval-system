@@ -52,8 +52,19 @@ public class ContractServiceImpl implements ContractService {
                 Sort.by(Sort.Direction.DESC, "createTime")
         );
 
+        String currentUser = securityUtil.getCurrentUsername();
+        boolean canSeeAll = securityUtil.hasRole(ROLE_ADMIN)
+                || securityUtil.hasRole(ROLE_APPROVER)
+                || securityUtil.hasRole(ROLE_ARCHIVIST);
+
         Specification<Contract> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
+
+            if (!canSeeAll) {
+                Predicate creatorPredicate = cb.equal(root.get("creator"), currentUser);
+                Predicate responsiblePredicate = cb.equal(root.get("responsiblePerson"), currentUser);
+                predicates.add(cb.or(creatorPredicate, responsiblePredicate));
+            }
 
             if (StringUtils.hasText(queryDTO.getContractNo())) {
                 predicates.add(cb.like(root.get("contractNo"), "%" + queryDTO.getContractNo() + "%"));
@@ -98,8 +109,19 @@ public class ContractServiceImpl implements ContractService {
 
     @Override
     public Contract getDetail(Long id) {
-        return contractRepository.findById(id)
+        Contract contract = contractRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("合同不存在"));
+
+        String currentUser = securityUtil.getCurrentUsername();
+        boolean canSeeAll = securityUtil.hasRole(ROLE_ADMIN)
+                || securityUtil.hasRole(ROLE_APPROVER)
+                || securityUtil.hasRole(ROLE_ARCHIVIST);
+        if (!canSeeAll && !contract.getCreator().equals(currentUser)
+                && (contract.getResponsiblePerson() == null || !contract.getResponsiblePerson().equals(currentUser))) {
+            throw new RuntimeException("没有权限查看该合同");
+        }
+
+        return contract;
     }
 
     @Override

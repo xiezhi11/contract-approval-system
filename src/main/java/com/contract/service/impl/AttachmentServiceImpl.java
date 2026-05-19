@@ -123,6 +123,18 @@ public class AttachmentServiceImpl implements AttachmentService {
 
     @Override
     public List<ContractAttachment> getByContractId(Long contractId) {
+        Contract contract = contractRepository.findById(contractId)
+                .orElseThrow(() -> new RuntimeException("合同不存在"));
+
+        String currentUser = securityUtil.getCurrentUsername();
+        boolean canSeeAll = securityUtil.hasRole(ROLE_ADMIN)
+                || securityUtil.hasRole(ROLE_APPROVER)
+                || securityUtil.hasRole(ROLE_ARCHIVIST);
+        if (!canSeeAll && !contract.getCreator().equals(currentUser)
+                && (contract.getResponsiblePerson() == null || !contract.getResponsiblePerson().equals(currentUser))) {
+            throw new RuntimeException("没有权限查看该合同的附件");
+        }
+
         return attachmentRepository.findByContractIdOrderByCreateTimeDesc(contractId);
     }
 

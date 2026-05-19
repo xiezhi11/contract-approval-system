@@ -32,9 +32,8 @@ public class AttachmentController {
     @PostMapping("/upload")
     public Result<ContractAttachment> upload(
             @RequestParam Long contractId,
-            @RequestParam MultipartFile file,
-            @RequestParam(required = false, defaultValue = "admin") String uploader) throws IOException {
-        return Result.success(attachmentService.upload(contractId, file, uploader));
+            @RequestParam MultipartFile file) throws IOException {
+        return Result.success(attachmentService.upload(contractId, file, null));
     }
 
     @DeleteMapping("/{id}")

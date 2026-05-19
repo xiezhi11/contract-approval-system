@@ -47,34 +47,29 @@ public class ContractController {
     }
 
     @PostMapping("/{id}/submit")
-    public Result<Contract> submitApproval(@PathVariable Long id, @RequestBody Map<String, String> params) {
-        String operator = params.getOrDefault("operator", "admin");
-        return Result.success(contractService.submitApproval(id, operator));
+    public Result<Contract> submitApproval(@PathVariable Long id) {
+        return Result.success(contractService.submitApproval(id, null));
     }
 
     @PostMapping("/{id}/approve")
-    public Result<Contract> approve(@PathVariable Long id, @RequestBody Map<String, String> params) {
-        String operator = params.getOrDefault("operator", "admin");
-        String remark = params.get("remark");
-        return Result.success(contractService.approve(id, operator, remark));
+    public Result<Contract> approve(@PathVariable Long id, @RequestBody(required = false) Map<String, String> params) {
+        String remark = params != null ? params.get("remark") : null;
+        return Result.success(contractService.approve(id, null, remark));
     }
 
     @PostMapping("/{id}/reject")
     public Result<Contract> reject(@PathVariable Long id, @RequestBody Map<String, String> params) {
-        String operator = params.getOrDefault("operator", "admin");
         String remark = params.get("remark");
-        return Result.success(contractService.reject(id, operator, remark));
+        return Result.success(contractService.reject(id, null, remark));
     }
 
     @PostMapping("/{id}/withdraw")
-    public Result<Contract> withdraw(@PathVariable Long id, @RequestBody Map<String, String> params) {
-        String operator = params.getOrDefault("operator", "admin");
-        return Result.success(contractService.withdraw(id, operator));
+    public Result<Contract> withdraw(@PathVariable Long id) {
+        return Result.success(contractService.withdraw(id, null));
     }
 
     @PostMapping("/{id}/archive")
-    public Result<Contract> archive(@PathVariable Long id, @RequestBody Map<String, String> params) {
-        String operator = params.getOrDefault("operator", "admin");
-        return Result.success(contractService.archive(id, operator));
+    public Result<Contract> archive(@PathVariable Long id) {
+        return Result.success(contractService.archive(id, null));
     }
 }

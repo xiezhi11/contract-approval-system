@@ -8,11 +8,12 @@ import com.contract.enums.ContractStatus;
 import com.contract.repository.ApprovalRecordRepository;
 import com.contract.repository.ContractAttachmentRepository;
 import com.contract.repository.ContractRepository;
+import com.contract.security.SecurityUtil;
 import com.contract.service.AttachmentService;
 import org.apache.commons.codec.digest.DigestUtils;
-import org.apache.commons.io.FileUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -39,6 +40,11 @@ public class AttachmentServiceImpl implements AttachmentService {
     @Autowired
     private ApprovalRecordRepository approvalRecordRepository;
 
+    @Autowired
+    private SecurityUtil securityUtil;
+
+    private static final String ROLE_ADMIN = "ADMIN";
+
     @Override
     @Transactional
     public ContractAttachment upload(Long contractId, MultipartFile file, String uploader) throws IOException {
@@ -47,6 +53,11 @@ public class AttachmentServiceImpl implements AttachmentService {
 
         if (!isEditable(contract.getStatus())) {
             throw new RuntimeException("当前状态不允许上传附件");
+        }
+
+        String currentUser = securityUtil.getCurrentUsername();
+        if (!canEditContract(contract, currentUser)) {
+            throw new AccessDeniedException("没有权限上传附件");
         }
 
         File uploadDir = new File(uploadPath);
@@ -76,10 +87,10 @@ public class AttachmentServiceImpl implements AttachmentService {
         attachment.setFileSize(file.getSize());
         attachment.setMd5(md5);
         attachment.setFileType(extension.substring(1));
-        attachment.setUploader(uploader);
+        attachment.setUploader(currentUser);
         attachment = attachmentRepository.save(attachment);
 
-        addApprovalRecord(contract, ApprovalAction.UPLOAD_ATTACHMENT, uploader, "上传附件：" + originalFileName);
+        addApprovalRecord(contract, ApprovalAction.UPLOAD_ATTACHMENT, currentUser, "上传附件：" + originalFileName);
 
         return attachment;
     }
@@ -95,6 +106,11 @@ public class AttachmentServiceImpl implements AttachmentService {
             throw new RuntimeException("当前状态不允许删除附件");
         }
 
+        String currentUser = securityUtil.getCurrentUsername();
+        if (!canEditContract(contract, currentUser)) {
+            throw new AccessDeniedException("没有权限删除附件");
+        }
+
         File file = new File(uploadPath + attachment.getFilePath());
         if (file.exists()) {
             file.delete();
@@ -102,7 +118,7 @@ public class AttachmentServiceImpl implements AttachmentService {
 
         attachmentRepository.delete(attachment);
 
-        addApprovalRecord(contract, ApprovalAction.DELETE_ATTACHMENT, "admin", "删除附件：" + attachment.getFileName());
+        addApprovalRecord(contract, ApprovalAction.DELETE_ATTACHMENT, currentUser, "删除附件：" + attachment.getFileName());
     }
 
     @Override
@@ -114,6 +130,14 @@ public class AttachmentServiceImpl implements AttachmentService {
         return status == ContractStatus.DRAFT
                 || status == ContractStatus.REJECTED
                 || status == ContractStatus.WITHDRAWN;
+    }
+
+    private boolean canEditContract(Contract contract, String currentUser) {
+        if (securityUtil.hasRole(ROLE_ADMIN)) {
+            return true;
+        }
+        return contract.getCreator().equals(currentUser)
+                || (contract.getResponsiblePerson() != null && contract.getResponsiblePerson().equals(currentUser));
     }
 
     private void addApprovalRecord(Contract contract, ApprovalAction action, String operator, String remark) {

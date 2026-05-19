@@ -106,6 +106,7 @@ Vue.component('contract-form', {
         handleSubmit() {
             this.$refs.form.validate(valid => {
                 if (!valid) return;
+                if (!this.validateDates()) return;
                 this.loading = true;
                 const request = this.contractId ? api.contract.update(this.form) : api.contract.create(this.form);
                 request.then(res => {
@@ -119,25 +120,83 @@ Vue.component('contract-form', {
                 });
             });
         },
-        handleUpload(file) {
-            if (!this.contractId && !this.form.id) {
-                this.$message.warning('请先保存合同基本信息后再上传附件');
-                return false;
-            }
-            const contractId = this.form.id || this.contractId;
-            this.loading = true;
-            api.attachment.upload(contractId, file).then(res => {
-                if (res.data.code === 200) {
-                    this.$message.success('上传成功');
-                    this.attachments.push(res.data.data);
-                    if (!this.form.id) {
-                        this.form.id = this.contractId;
-                    }
+        validateDates() {
+            const { signDate, effectiveDate, expiryDate } = this.form;
+            if (signDate && effectiveDate) {
+                if (new Date(effectiveDate) < new Date(signDate)) {
+                    this.$message.error('生效日期不能早于签订日期');
+                    return false;
                 }
-            }).finally(() => {
-                this.loading = false;
-            });
-            return false;
+            }
+            if (effectiveDate && expiryDate) {
+                if (new Date(expiryDate) < new Date(effectiveDate)) {
+                    this.$message.error('到期日期不能早于生效日期');
+                    return false;
+                }
+            }
+            if (signDate && expiryDate) {
+                if (new Date(expiryDate) < new Date(signDate)) {
+                    this.$message.error('到期日期不能早于签订日期');
+                    return false;
+                }
+            }
+            return true;
+        },
+        beforeUpload(file) {
+            if (!this.contractId && !this.form.id) {
+                const hasRequired = this.form.contractNo && this.form.contractName 
+                    && this.form.customerName && this.form.amount !== null;
+                if (!hasRequired) {
+                    this.$message.warning('请先填写必填项（合同编号、合同名称、客户名称、合同金额）');
+                    return false;
+                }
+            }
+            return true;
+        },
+        handleUpload(options) {
+            const fileObj = options.file;
+            const self = this;
+
+            function doUpload(contractId) {
+                self.loading = true;
+                api.attachment.upload(contractId, fileObj).then(res => {
+                    if (res.data.code === 200) {
+                        self.$message.success('上传成功');
+                        self.attachments.push(res.data.data);
+                        options.onSuccess(res.data);
+                    } else {
+                        self.$message.error(res.data.message || '上传失败');
+                        options.onError(res.data.message || '上传失败');
+                    }
+                }).catch(err => {
+                    self.$message.error(err.message || '上传失败');
+                    options.onError(err.message || '上传失败');
+                }).finally(() => {
+                    self.loading = false;
+                });
+            }
+
+            if (!this.contractId && !this.form.id) {
+                this.loading = true;
+                api.contract.create(this.form).then(res => {
+                    if (res.data.code === 200) {
+                        this.form.id = res.data.data.id;
+                        this.$message.success('合同信息已保存，正在上传附件...');
+                        doUpload(this.form.id);
+                    } else {
+                        this.$message.error(res.data.message || '保存失败');
+                        options.onError(res.data.message || '保存失败');
+                        this.loading = false;
+                    }
+                }).catch(err => {
+                    this.$message.error(err.message || '保存失败');
+                    options.onError(err.message || '保存失败');
+                    this.loading = false;
+                });
+            } else {
+                const contractId = this.form.id || this.contractId;
+                doUpload(contractId);
+            }
         },
         handleDeleteAttachment(attachment) {
             this.$confirm('确认删除该附件吗？', '提示', {
@@ -257,8 +316,9 @@ Vue.component('contract-form', {
                 <el-divider content-position="left">附件管理</el-divider>
                 <el-upload
                     class="upload-demo"
-                    action="#"
+                    action=""
                     :http-request="handleUpload"
+                    :before-upload="beforeUpload"
                     :show-file-list="false"
                     :disabled="!isEditable()">
                     <el-button type="primary" icon="el-icon-upload" :disabled="!isEditable()">上传附件</el-button>

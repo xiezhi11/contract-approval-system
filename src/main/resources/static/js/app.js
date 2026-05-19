@@ -1,7 +1,19 @@
-new Vue({
+const mainApp = new Vue({
     el: '#app',
     data() {
         return {
+            showLogin: true,
+            loggedIn: false,
+            currentUser: null,
+            loginLoading: false,
+            loginForm: {
+                username: '',
+                password: ''
+            },
+            loginRules: {
+                username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+                password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
+            },
             loading: false,
             tableData: [],
             total: 0,
@@ -25,10 +37,53 @@ new Vue({
         };
     },
     created() {
-        this.loadData();
+        window.mainApp = this;
+        if (auth.isAuthenticated()) {
+            const user = auth.getCurrentUser();
+            if (user) {
+                this.currentUser = user;
+                this.loggedIn = true;
+                this.showLogin = false;
+                this.loadData();
+            }
+        }
     },
     methods: {
+        handleLogin() {
+            this.$refs.loginForm.validate(valid => {
+                if (!valid) return;
+                this.loginLoading = true;
+                auth.login(this.loginForm).then(res => {
+                    if (res.data.code === 200) {
+                        const { token, user } = res.data.data;
+                        auth.setToken(token);
+                        auth.setCurrentUser(user);
+                        this.currentUser = user;
+                        this.loggedIn = true;
+                        this.showLogin = false;
+                        this.loginForm = { username: '', password: '' };
+                        this.$message.success('登录成功');
+                        this.loadData();
+                    }
+                }).finally(() => {
+                    this.loginLoading = false;
+                });
+            });
+        },
+        handleLogout() {
+            this.$confirm('确认退出登录吗？', '提示', {
+                type: 'warning'
+            }).then(() => {
+                auth.logout();
+                this.loggedIn = false;
+                this.currentUser = null;
+                this.showLogin = true;
+                this.tableData = [];
+                this.$message.success('已退出登录');
+            }).catch(() => {});
+        },
         loadData() {
+            if (!this.loggedIn) return;
             this.loading = true;
             const params = { ...this.queryForm };
             if (params.minAmount !== '') {
@@ -153,6 +208,7 @@ new Vue({
         },
         getStatusText,
         getStatusTagType,
+        getRoleText,
         canEdit,
         canSubmit,
         canApprove,
